@@ -1,64 +1,70 @@
 import json
 import boto3
 from decimal import Decimal
-from uuid import UUID
-import datetime
 from botocore.exceptions import ClientError
 
+
 def lambda_handler(event, context):
-    
-   #check if data is in json format
+    # check if data is in json format
     try:
         if type(event) is dict:
-            data=event
+            data = event
         else:
-            data=json.loads(event)
-    except ValueError: 
-        return(return_error(400, 'bad data sent'))
-    
-    
-    #init needed dynamodb access and table
+            data = json.loads(event)
+    except ValueError:
+        return return_error(400, 'bad data sent')
+
+    # init needed dynamodb access and table
     try:
         dynamodb = boto3.resource('dynamodb')
-        table = dynamodb.Table('eve-tasks')
-    except: 
-        return(return_error(500, 'arjun did a stupid'))
-    
-    #get current date
-    cur_date = str(datetime.datetime.utcnow().replace(microsecond=0).isoformat())
-    cur_date = cur_date.replace('-','')
-    cur_date = cur_date.replace(':','')
-    cur_date += 'Z'
-    
-    #iterate through all sync items sent
-    for t in data:
-        #check if task in db or sent task is newer
-        try:
-        response=table.get_item(
-        Key={
-            'uuid' : t['uuid']
-        },
-        ProjectionExpression='modified'
-        )
-        except ClientError as e:
-            return(return_error(500,'task db not working right'))
-        
-        #convert all floats to decimal cause dynamos a pain in the ass
-        for key,value in t 
-            if type(value) is float:
-                t[key]=Decimal(value)
-        
-        #if task date is bigger than dynamodb task then add it or if its not in dynamo also add it 
-        if 'Item' in response:
-            db_task=response['Item']
-            
-    
-    
-def translate_date(string_date):
-    return datetime.datetime.strptime(string_date,'%Y%m%dT%H%M%SZ')
-    
+        table = dynamodb.Table('jaspr-tasks')
+    except Exception as e:
+        return return_error(500, 'arjun did a stupid', e)
 
-def return_error(code , msg, body={}):
+    # iterate through all sync items sent and put new ones in db
+    for t in data:
+        for key, value in t:
+            if type(value) is float:
+                t[key] = Decimal(key)
+        try:
+            table.putItem(
+                Item=t,
+                ConditionalExpression='attribute_not_exists uuid OR #m < :m',
+                ExpressionAttributeValues={
+                    ':m': t['modified'],
+                    '#m': 'modified'
+
+                }
+            )
+        except ClientError as e:
+            print(e)
+        except Exception as e:
+            return return_error(500, 'put in db failure', e)
+    # scan db to get all items
+    try:
+        response = table.scan(
+            ConsistentRead=True,
+            FilterExpression='status != :s',
+            ExpressionAttributeValues={
+                ":s": "deleted"
+            }
+        )
+    except Exception as e:
+        return return_error(500, 'scan db failure', e)
+
+    task_list = response['Items']
+
+    # return scanned items
+    return {
+        'statusCode': 200,
+        'body': task_list
+    }
+
+
+FilterExpression
+
+
+def return_error(code, msg, body={}):
     return {
         'statusCode': code,
         'message': msg,
