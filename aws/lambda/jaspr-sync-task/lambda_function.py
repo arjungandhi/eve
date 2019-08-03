@@ -7,10 +7,10 @@ from botocore.exceptions import ClientError
 def lambda_handler(event, context):
     # check if data is in json format
     try:
-        if type(event) is dict:
-            data = event
-        else:
+        if type(event) is str:
             data = json.loads(event)
+        else:
+            data = event
     except ValueError:
         return return_error(400, 'bad data sent')
 
@@ -22,18 +22,20 @@ def lambda_handler(event, context):
         return return_error(500, 'arjun did a stupid', e)
 
     # iterate through all sync items sent and put new ones in db
-    for t in data:
-        for key, value in t:
+    for t in list(data):
+        for key, value in t.items():
             if type(value) is float:
-                t[key] = Decimal(key)
+                t[key] = int(value)
         try:
-            table.putItem(
+            table.put_item(
                 Item=t,
-                ConditionalExpression='attribute_not_exists uuid OR #m < :m',
+                ConditionExpression='attribute_not_exists(#u) OR #m < :m',
                 ExpressionAttributeValues={
-                    ':m': t['modified'],
+                    ':m' : t['modified']
+                },
+                ExpressionAttributeNames={
+                    '#u': 'uuid',
                     '#m': 'modified'
-
                 }
             )
         except ClientError as e:
@@ -43,11 +45,7 @@ def lambda_handler(event, context):
     # scan db to get all items
     try:
         response = table.scan(
-            ConsistentRead=True,
-            FilterExpression='status != :s',
-            ExpressionAttributeValues={
-                ":s": "deleted"
-            }
+            ConsistentRead=True
         )
     except Exception as e:
         return return_error(500, 'scan db failure', e)
@@ -59,10 +57,6 @@ def lambda_handler(event, context):
         'statusCode': 200,
         'body': task_list
     }
-
-
-FilterExpression
-
 
 def return_error(code, msg, body={}):
     return {
