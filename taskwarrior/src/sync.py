@@ -27,20 +27,28 @@ for task in task_list:
 
 
 #take task_list and make request to sync
-r = requests.post(url = "https://api.arjungandhi.com/jaspr/task/sync", data = json.dumps(task_list))
-#task list is body of request
-print(r.json())
-if r.status != 200:
+r = requests.post(url = 'https://api.arjungandhi.com/jaspr/task/sync', data = json.dumps(task_list))
+
+
+if r.status_code != 200:
     raise Exception(f'Server did not responded with {r.status}')
 
-task_list=r.json
+
+#task list is body of request
+r=r.json()
+task_list=r['body']
+print(task_list)
+
 #go through tasks and change time to millis
 for task in task_list:
+    
     #go through each task list time and convert check if it is a date if it is convert to millis
     for key,value in task.items():
-        #convert all string time to millis since epoch
+        #convert all millis time to task warrior format
         if type(value) is float and value>1000000:
-            value=datetime.strptime(value ,task_warrior_time_format).timestamp()*1000
-        #convert all floats to ints
-        if type(value) is float:
-            task[key]=int(value)
+            date=datetime.fromtimestamp(value/1000) 
+            value=date.strftime(task_warrior_time_format)
+            task[key]=value
+
+#put new json into taskwarrior
+command=subprocess.run(['task' , 'import'], input=json.dumps(task_list), encoding='utf-8')
