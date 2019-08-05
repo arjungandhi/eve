@@ -1,8 +1,8 @@
 import json
 import boto3
 from decimal import Decimal
-from botocore.exceptions import ClientError
-
+from botocore.exceptions import ClientError 
+import time
 
 def lambda_handler(event, context):
     # check if data is in json format
@@ -26,22 +26,34 @@ def lambda_handler(event, context):
         for key, value in t.items():
             if type(value) is float:
                 t[key] = int(value)
+        
+        if t['status'] == 'deleted':
+            t['ttl'] = int(time.time()*1000)
+        
         try:
-            table.put_item(
-                Item=t,
-                ConditionExpression='attribute_not_exists(#u) OR #m < :m',
-                ExpressionAttributeValues={
-                    ':m' : t['modified']
-                },
-                ExpressionAttributeNames={
-                    '#u': 'uuid',
-                    '#m': 'modified'
-                }
+            old_task=table.get_item(
+                Key={'uuid' : t['uuid']},
+                ProjectionExpression='modified',
+                ConsistentRead=True
             )
-        except ClientError as e:
-            print(e)
+            
+            if 'Item' in old_task.keys():
+                old_task=old_task['Item']
+
+                if float(old_task['modified']) >= float(t['modified']):
+                    continue
+
+            table.put_item(
+                Item=t
+            )
+        except boto3.client('dynamodb').exceptions.ResourceNotFoundException:
+            pass
         except Exception as e:
             return return_error(500, 'put in db failure', e)
+    
+        
+
+
     # scan db to get all items
     try:
         response = table.scan(

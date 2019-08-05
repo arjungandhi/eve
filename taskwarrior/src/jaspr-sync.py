@@ -1,3 +1,4 @@
+#!/bin/python
 import json
 import subprocess
 import requests
@@ -11,8 +12,9 @@ task_warrior_time_format='%Y%m%dT%H%M%SZ'
 result = subprocess.getoutput(['task export'])
 task_list=json.loads(result)
 
+
 #delete all tasks that are deleted
-task_list=[t for t in task_list if t['status'] != 'deleted']
+#task_list=[t for t in task_list if t['status'] != 'deleted']
 
 #go through tasks and change time to millis
 for task in task_list:
@@ -25,7 +27,7 @@ for task in task_list:
         if type(value) is float:
             task[key]=int(value)
 
-
+print(task_list)
 #take task_list and make request to sync
 r = requests.post(url = 'https://api.arjungandhi.com/jaspr/task/sync', data = json.dumps(task_list))
 
