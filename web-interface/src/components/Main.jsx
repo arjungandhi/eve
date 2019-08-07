@@ -23,10 +23,7 @@ export default class Main extends React.Component {
 
   render() {
     return (<div>
-      <ul>
-      <li><Link to='/'>Tasks</Link></li>
-      <li><Link to='/project/potato'>Potato Project</Link></li>
-      </ul>
+
     <Content/>
     </div>)
   }
